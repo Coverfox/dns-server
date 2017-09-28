@@ -1,0 +1,20 @@
+exclude: 'venv-update'
+repos:
+-   repo: git://github.com/pre-commit/pre-commit-hooks
+    sha: v1.2.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: check-merge-conflict
+    -   id: check-json
+    -   id: debug-statements
+    -   id: check-added-large-files
+    -   id: flake8
+-   repo: local
+    hooks:
+    -   id: isort
+        name: Sorting Imports
+        entry: isort
+        language: system
+        args: ["-y"]
+        files: \.py$
+        requirements: true
