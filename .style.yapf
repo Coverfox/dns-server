@@ -1,0 +1,11 @@
+[style]
+based_on_style = pep8
+split_before_logical_operator = true
+blank_line_before_nested_class_or_def = true
+coalesce_brackets = true
+column_limit = 80
+allow_split_before_dict_value = false
+dedent_closing_brackets = true
+split_before_expression_after_opening_paren = true
+split_before_first_argument = true
+split_complex_comprehension = true

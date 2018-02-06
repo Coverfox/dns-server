@@ -18,3 +18,10 @@ repos:
         args: ["-y"]
         files: \.py$
         requirements: true
+    -   id: yapf
+        name: Format python
+        entry: yapf
+        language: python
+        args: ["-i"]
+        files: \.py$
+        requirements: true
