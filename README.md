@@ -68,9 +68,10 @@ In race mode, stats are recorded per upstream/protocol against each response. If
 Both proxy and race modes provide option to override DNS records. This can be done using `--override` option.
 
 `--override` takes path to json file which contains the list of custom records. Each record is a list of five elements. Record name, record type, record class, ttl and record data.
+Record name can be a glob pattern.
 
 Example record.
-> ['abc.com', 'A', 'IN', 60, '1.1.1.1']
+> ['[a-z]abc.com', 'A', 'IN', 60, '1.1.1.1']
 
 ---
 > Since this is meant to be used as internal DNS server, only requests coming from an internal ip will get a valid response. Any request coming from an external ip will get **NXDOMAIN** response.

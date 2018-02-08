@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import collections
 import concurrent.futures
+import copy
 import functools
 import ipaddress
 import json
@@ -33,10 +34,8 @@ UPSTREAM_TIMEOUT = 1
 
 
 def match_record(record: dns.RR, req: dns.DNSQuestion) -> bool:
-    return (
-        req.qname == record.rname
-        and (req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype)
-    )
+    return ((req.qname == record.rname or req.qname.matchGlob(record.rname))
+            and (req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype))
 
 
 def nodomain(record: dns.DNSRecord) -> dns.DNSRecord:
@@ -116,8 +115,10 @@ async def resolver(
 ) -> dns.DNSRecord:
     for domain in INTERNAL_DOMAINS:
         if match_record(domain, request_record.q):
+            answer: dns.RR = copy.copy(domain)
+            answer.rname = request_record.q.qname
             reply = request_record.reply()
-            reply.add_answer(domain)
+            reply.add_answer(answer)
             return reply
 
     assert protocol in ['tcp', 'udp']
