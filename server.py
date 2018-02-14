@@ -30,7 +30,8 @@ logger.setLevel(logging.DEBUG)
 
 INTERNAL_DOMAINS = ()
 
-UPSTREAM_TIMEOUT = 1
+# Sane default used by `dig` and `resolv.conf`
+UPSTREAM_TIMEOUT = 5
 
 
 def match_record(record: dns.RR, req: dns.DNSQuestion) -> bool:
@@ -101,7 +102,7 @@ class UpstreamException(RuntimeError):
     ...
 
 
-def receive(sock, nbytes=8192, timeout=1, *, loop=None):
+def receive(sock, nbytes=8192, timeout=UPSTREAM_TIMEOUT, *, loop=None):
     return asyncio.wait_for(
         loop.sock_recv(sock, nbytes), timeout=timeout, loop=loop
     )
