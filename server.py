@@ -112,7 +112,7 @@ class UpstreamException(RuntimeError):
 
 
 def receive(sock, nbytes=8192, timeout=UPSTREAM_TIMEOUT, *, loop=None):
-    return asyncio.wait_for(loop.sock_recv(sock, nbytes), timeout=timeout, loop=loop)
+    return asyncio.wait_for(loop.sock_recv(sock, nbytes), timeout=timeout)
 
 
 async def resolver(
@@ -160,10 +160,10 @@ async def resolver(
 
     try:
         conn = loop.sock_connect(sock=sock, address=(upstream.compressed, 53))
-        await asyncio.wait_for(conn, timeout=UPSTREAM_TIMEOUT, loop=loop)
+        await asyncio.wait_for(conn, timeout=UPSTREAM_TIMEOUT)
 
         send_req = loop.sock_sendall(sock=sock, data=data)
-        await asyncio.wait_for(send_req, timeout=UPSTREAM_TIMEOUT, loop=loop)
+        await asyncio.wait_for(send_req, timeout=UPSTREAM_TIMEOUT)
 
         if protocol == "tcp":
             response = await receive(sock, loop=loop)
