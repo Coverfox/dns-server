@@ -11,7 +11,7 @@ export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init -)"
 eval "$(pyenv virtualenv-init -)"
 
-pyenv install 3.6.4 -s
+pyenv install -s
 
-pyenv virtualenv 3.6.4 dns_server
+pyenv virtualenv dns_server
 pyenv activate dns_server && pip install virtualenv

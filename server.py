@@ -21,7 +21,7 @@ import uvloop
 log_handler = logging.StreamHandler()
 log_handler.setLevel(logging.DEBUG)
 log_handler.setFormatter(
-    logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S')
+    logging.Formatter("%(asctime)s: %(message)s", datefmt="%H:%M:%S")
 )
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,14 @@ UPSTREAM_TIMEOUT = 5
 
 
 def match_record(record: dns.RR, req: dns.DNSQuestion) -> bool:
-    return ((req.qname == record.rname or req.qname.matchGlob(record.rname))
-            and (req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype))
+    return (req.qname == record.rname or req.qname.matchGlob(record.rname)) and (
+        req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype
+    )
 
 
 def nodomain(record: dns.DNSRecord) -> dns.DNSRecord:
     reply = record.reply()
-    reply.header.rcode = getattr(dns.RCODE, 'NXDOMAIN')
+    reply.header.rcode = getattr(dns.RCODE, "NXDOMAIN")
     return reply
 
 
@@ -49,7 +50,7 @@ def is_internal_ip(request_ip: str) -> bool:
     try:
         return ipaddress.ip_address(request_ip).is_private
     except ValueError:
-        logger.debug('Unable to determine ip state', exc_info=True)
+        logger.debug("Unable to determine ip state", exc_info=True)
         return False
 
 
@@ -60,7 +61,7 @@ def _release_waiter(waiter, *_):
 
 async def wait_for_first_success(fs, timeout, loop):
     fs = {asyncio.ensure_future(f, loop=loop) for f in set(fs)}
-    assert fs, 'Set of Futures is empty.'
+    assert fs, "Set of Futures is empty."
 
     waiter = loop.create_future()
     timeout_handle = None
@@ -103,16 +104,14 @@ class UpstreamException(RuntimeError):
 
 
 def receive(sock, nbytes=8192, timeout=UPSTREAM_TIMEOUT, *, loop=None):
-    return asyncio.wait_for(
-        loop.sock_recv(sock, nbytes), timeout=timeout, loop=loop
-    )
+    return asyncio.wait_for(loop.sock_recv(sock, nbytes), timeout=timeout, loop=loop)
 
 
 async def resolver(
-        request_record: dns.DNSRecord,
-        upstream: ipaddress.IPv4Address,
-        protocol: str,
-        loop=None
+    request_record: dns.DNSRecord,
+    upstream: ipaddress.IPv4Address,
+    protocol: str,
+    loop=None,
 ) -> dns.DNSRecord:
     for domain in INTERNAL_DOMAINS:
         if match_record(domain, request_record.q):
@@ -122,13 +121,13 @@ async def resolver(
             reply.add_answer(answer)
             return reply
 
-    assert protocol in ['tcp', 'udp']
+    assert protocol in ["tcp", "udp"]
     loop = loop or asyncio.get_event_loop()
 
     data = request_record.pack()
     if len(data) > 65535:
         raise ValueError("Packet length too long: %d" % len(data))
-    if protocol == 'tcp':
+    if protocol == "tcp":
         data = struct.pack("!H", len(data)) + data
         sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
     else:
@@ -143,7 +142,7 @@ async def resolver(
         send_req = loop.sock_sendall(sock=sock, data=data)
         await asyncio.wait_for(send_req, timeout=UPSTREAM_TIMEOUT, loop=loop)
 
-        if protocol == 'tcp':
+        if protocol == "tcp":
             response = await receive(sock, loop=loop)
             length = struct.unpack("!H", bytes(response[:2]))[0]
             while len(response) - 2 < length:
@@ -162,20 +161,15 @@ async def resolver(
 
 
 class DNSResolver(abc.ABC):
-
     def __init__(self, upstreams, loop=None):
         self.upstreams = upstreams
         self.loop = loop or asyncio.get_event_loop()
 
     @abc.abstractmethod
-    async def _get_reply(
-            self, request: dns.DNSRecord, protocol: str
-    ) -> dns.DNSRecord:
+    async def _get_reply(self, request: dns.DNSRecord, protocol: str) -> dns.DNSRecord:
         ...
 
-    async def get_reply(
-            self, data: bytes, request_ip: str, protocol: str
-    ) -> bytearray:
+    async def get_reply(self, data: bytes, request_ip: str, protocol: str) -> bytearray:
         request = dns.DNSRecord.parse(data)
         if is_internal_ip(request_ip=request_ip):
             response = await self._get_reply(request=request, protocol=protocol)
@@ -184,14 +178,14 @@ class DNSResolver(abc.ABC):
 
         if response.header.rcode == dns.RCODE.NOERROR:
             logger.info(
-                f'{protocol} / {request_ip} / '
+                f"{protocol} / {request_ip} / "
                 f'"{request.q.qname} ({dns.QTYPE[request.q.qtype]})" --> '
                 f'"{response.q.qname} ({dns.QTYPE[response.q.qtype]})" / '
                 f'RRs: {",".join(dns.QTYPE[a.rtype] for a in response.rr)}'
             )
         else:
             logger.info(
-                f'{protocol} / {request_ip} / '
+                f"{protocol} / {request_ip} / "
                 f'"{request.q.qname} ({dns.QTYPE[request.q.qtype]})" --> '
                 f'"{response.q.qname} ({dns.QTYPE[response.q.qtype]}) '
                 f'{dns.RCODE[response.header.rcode]}"'
@@ -199,32 +193,26 @@ class DNSResolver(abc.ABC):
 
         return response.pack()
 
-    get_tcp_reply = functools.partialmethod(get_reply, protocol='tcp')
-    get_udp_reply = functools.partialmethod(get_reply, protocol='udp')
+    get_tcp_reply = functools.partialmethod(get_reply, protocol="tcp")
+    get_udp_reply = functools.partialmethod(get_reply, protocol="udp")
 
     async def watch_upstreams(self):
         request = dns.DNSRecord()
         request.add_question(dns.DNSQuestion("google.com"))
 
-        await self._get_reply(request=request, protocol='udp')
+        await self._get_reply(request=request, protocol="udp")
 
 
 class ProxyDNSResolver(DNSResolver):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.upstreams = frozenset(self.upstreams)
 
-    async def _get_reply(
-            self, request: dns.DNSRecord, protocol: str
-    ) -> dns.DNSRecord:
+    async def _get_reply(self, request: dns.DNSRecord, protocol: str) -> dns.DNSRecord:
         done, pending = await wait_for_first_success(
             [
-                resolver(
-                    request_record=request,
-                    upstream=upstream,
-                    protocol=protocol
-                ) for upstream in self.upstreams
+                resolver(request_record=request, upstream=upstream, protocol=protocol)
+                for upstream in self.upstreams
             ],
             timeout=None,
             loop=self.loop,
@@ -257,21 +245,20 @@ class RaceDNSResolver(DNSResolver):
     def set_upstreams(self, value: list):
         self._upstreams = {
             upstream: {
-                'tcp': collections.deque(
-                    (True for _ in range(self.sample_count)),
-                    maxlen=self.sample_count,
+                "tcp": collections.deque(
+                    (True for _ in range(self.sample_count)), maxlen=self.sample_count,
                 ),
-                'udp': collections.deque(
-                    (True for _ in range(self.sample_count)),
-                    maxlen=self.sample_count,
+                "udp": collections.deque(
+                    (True for _ in range(self.sample_count)), maxlen=self.sample_count,
                 ),
             }
             for upstream in value
         }
 
-    def get_upstreams(self, protocol='udp'):
+    def get_upstreams(self, protocol="udp"):
         return [
-            upstream for upstream, proto_stats in self._upstreams.items()
+            upstream
+            for upstream, proto_stats in self._upstreams.items()
             if sum(proto_stats[protocol]) >= self.cutoff
         ] or self._upstreams.keys()
 
@@ -280,9 +267,7 @@ class RaceDNSResolver(DNSResolver):
 
     upstreams = property(get_upstreams, set_upstreams, del_upstreams)
 
-    async def _get_reply(
-            self, request: dns.DNSRecord, protocol: str
-    ) -> dns.DNSRecord:
+    async def _get_reply(self, request: dns.DNSRecord, protocol: str) -> dns.DNSRecord:
         done, pending = await wait_for_first_success(
             [
                 self._get_delay_reply(
@@ -290,8 +275,8 @@ class RaceDNSResolver(DNSResolver):
                     upstream=upstream,
                     delay=i * self._delay,
                     protocol=protocol,
-                ) for i, upstream in
-                enumerate(self.get_upstreams(protocol=protocol))
+                )
+                for i, upstream in enumerate(self.get_upstreams(protocol=protocol))
             ],
             timeout=None,
             loop=self.loop,
@@ -306,20 +291,19 @@ class RaceDNSResolver(DNSResolver):
         return nodomain(request)
 
     async def _get_delay_reply(
-            self, request: dns.DNSRecord, upstream: ipaddress.IPv4Address,
-            delay: float, protocol: str
+        self,
+        request: dns.DNSRecord,
+        upstream: ipaddress.IPv4Address,
+        delay: float,
+        protocol: str,
     ) -> dns.DNSRecord:
         await asyncio.sleep(delay=delay)
         fut = asyncio.ensure_future(
-            resolver(
-                request_record=request, upstream=upstream, protocol=protocol
-            ),
-            loop=self.loop
+            resolver(request_record=request, upstream=upstream, protocol=protocol),
+            loop=self.loop,
         )
         callback = functools.partial(
-            self.update_upstream_status,
-            upstream=upstream,
-            protocol=protocol,
+            self.update_upstream_status, upstream=upstream, protocol=protocol,
         )
         fut.add_done_callback(callback)
         return await fut
@@ -337,11 +321,9 @@ class RaceDNSResolver(DNSResolver):
 
     @staticmethod
     def get_health_check_request() -> dns.DNSRecord:
-        return dns.DNSRecord.question(qname='www.google.com')
+        return dns.DNSRecord.question(qname="www.google.com")
 
-    def upstream_health_check(
-            self, upstream: ipaddress.IPv4Address, protocol: str
-    ):
+    def upstream_health_check(self, upstream: ipaddress.IPv4Address, protocol: str):
         return asyncio.ensure_future(
             asyncio.gather(
                 self._get_delay_reply(
@@ -359,20 +341,15 @@ class RaceDNSResolver(DNSResolver):
     async def schedule_upstream_health_check(self):
         while True:
             await asyncio.sleep(1 * 20)
-            logger.debug(f'current stats: {self._upstreams}')
+            logger.debug(f"current stats: {self._upstreams}")
             for upstream, proto_stats in self._upstreams.items():
                 for protocol in proto_stats:
-                    self.upstream_health_check(
-                        upstream=upstream, protocol=protocol
-                    )
-                    logger.info(
-                        f'Scheduled health check for {upstream} ({protocol})'
-                    )
+                    self.upstream_health_check(upstream=upstream, protocol=protocol)
+                    logger.info(f"Scheduled health check for {upstream} ({protocol})")
 
 
 async def tcp_client_cb(
-        client_reader: asyncio.StreamReader,
-        client_writer: asyncio.StreamWriter, get_reply
+    client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter, get_reply
 ) -> None:
     try:
         data = await client_reader.read(8192)
@@ -384,7 +361,7 @@ async def tcp_client_cb(
             data += new_data
         data = data[2:]
 
-        addr = client_writer.transport.get_extra_info('peername', (None, 0))
+        addr = client_writer.transport.get_extra_info("peername", (None, 0))
         request_ip, _ = addr
         return_data = await get_reply(data=data, request_ip=request_ip)
         return_data = struct.pack("!H", len(return_data)) + return_data
@@ -395,7 +372,6 @@ async def tcp_client_cb(
 
 
 class DNSUDPProtocol(asyncio.DatagramProtocol):
-
     def __init__(self, get_reply):
         super().__init__()
         self.get_reply = get_reply
@@ -419,10 +395,10 @@ def dns_udp_factory(get_reply):
 def reload_conf(path):
     global INTERNAL_DOMAINS
     try:
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             data = json.load(f)
     except (TypeError, ValueError):
-        return logger.warning('Unable to load json', exc_info=True)
+        return logger.warning("Unable to load json", exc_info=True)
 
     try:
         INTERNAL_DOMAINS = tuple(
@@ -431,20 +407,21 @@ def reload_conf(path):
                 rtype=getattr(dns.QTYPE, rtype),
                 rclass=getattr(dns.CLASS, rclass),
                 ttl=ttl,
-                rdata=getattr(dns.dns, rtype)(rdata)
-            ) for rname, rtype, rclass, ttl, rdata in data
+                rdata=getattr(dns.dns, rtype)(rdata),
+            )
+            for rname, rtype, rclass, ttl, rdata in data
         )
         loaded = ", ".join(
             f"{r.rname} ({dns.QTYPE[r.rtype]})" for r in INTERNAL_DOMAINS
         )
         logger.debug(f'loaded internal records from "{path}": {loaded}')
     except (AttributeError, ValueError, TypeError):
-        return logger.warning('Unable to parse json', exc_info=True)
+        return logger.warning("Unable to parse json", exc_info=True)
 
 
 def validate_file(path):
     try:
-        f = open(path, mode='r')
+        f = open(path, mode="r")
     except OSError as e:
         raise argparse.ArgumentTypeError(f"can't open '{path}': {e}")
     else:
@@ -453,46 +430,44 @@ def validate_file(path):
 
 
 def main(args=None):
-    parser = argparse.ArgumentParser(prog='DNS Server')
+    parser = argparse.ArgumentParser(prog="DNS Server")
 
     excl_group = parser.add_mutually_exclusive_group()
     excl_group.add_argument(
-        '--proxy',
-        action='append',
+        "--proxy",
+        action="append",
         type=ipaddress.IPv4Address,
-        help='Runs dns server in proxy mode',
+        help="Runs dns server in proxy mode",
     )
     excl_group.add_argument(
-        '--race',
-        action='append',
+        "--race",
+        action="append",
         type=ipaddress.IPv4Address,
         help=(
-            'forwards requests to all the given servers and '
-            'returns the first response of first server'
-        )
+            "forwards requests to all the given servers and "
+            "returns the first response of first server"
+        ),
     )
     parser.add_argument(
-        '--delay',
-        action='store',
+        "--delay",
+        action="store",
         type=float,
         default=1.0,
-        help=(
-            'time to wait before starting to query from next server in the race'
-        )
+        help=("time to wait before starting to query from next server in the race"),
     )
     parser.add_argument(
-        '--port',
-        action='store',
+        "--port",
+        action="store",
         type=int,
         default=53,
-        help='port on which to run the dns server'
+        help="port on which to run the dns server",
     )
     parser.add_argument(
-        '--override',
-        action='store',
+        "--override",
+        action="store",
         type=validate_file,
         required=False,
-        help='json file containing records to override'
+        help="json file containing records to override",
     )
 
     options = parser.parse_args(args=args)
@@ -505,24 +480,21 @@ def main(args=None):
 
     if options.race:
         if len(options.race) != len(set(options.race)):
-            raise ValueError('Repeated entries found in upstreams')
+            raise ValueError("Repeated entries found in upstreams")
 
         handler = RaceDNSResolver(
-            upstreams=options.race,
-            delay=options.delay,
-            loop=loop,
+            upstreams=options.race, delay=options.delay, loop=loop,
         )
     else:
         handler = ProxyDNSResolver(
-            upstreams=options.proxy or [ipaddress.IPv4Address('8.8.8.8')],
-            loop=loop,
+            upstreams=options.proxy or [ipaddress.IPv4Address("8.8.8.8")], loop=loop,
         )
 
     if options.override:
         reload_conf(path=options.override)
 
         def handle_hup(*_):
-            logger.debug('received reload signal')
+            logger.debug("received reload signal")
             loop.run_in_executor(io_exc, reload_conf, options.override)
 
         signal.signal(signal.SIGHUP, handle_hup)
@@ -530,27 +502,27 @@ def main(args=None):
     dns_tcp = loop.run_until_complete(
         asyncio.start_server(
             functools.partial(tcp_client_cb, get_reply=handler.get_tcp_reply),
-            host='0.0.0.0',
+            host="0.0.0.0",
             port=port,
-            reuse_port=True
+            reuse_port=True,
         )
     )
     dns_udp, _ = loop.run_until_complete(
         loop.create_datagram_endpoint(
             functools.partial(DNSUDPProtocol, get_reply=handler.get_udp_reply),
-            local_addr=('0.0.0.0', port),
-            reuse_port=True
+            local_addr=("0.0.0.0", port),
+            reuse_port=True,
         )
     )
 
-    logger.info('started dns server on port %s', port)
+    logger.info("started dns server on port %s", port)
 
     def handle_exit(*_):
-        logger.debug('received exit signal')
+        logger.debug("received exit signal")
         cleanup()
 
     def cleanup():
-        logger.info('Stopping dns server')
+        logger.info("Stopping dns server")
         try:
             dns_tcp.close(), dns_udp.close()
             # wait till dns server is closed
@@ -573,5 +545,5 @@ def main(args=None):
     cleanup()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
