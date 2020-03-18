@@ -426,7 +426,7 @@ def reload_conf(path):
     try:
         INTERNAL_DOMAINS = tuple(
             dns.RR(
-                rname=dns.DNSLabel(rname),
+                rname=dns.DNSLabel(rname.encode()),
                 rtype=getattr(dns.QTYPE, rtype),
                 rclass=getattr(dns.CLASS, rclass),
                 ttl=ttl,
