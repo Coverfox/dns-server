@@ -33,11 +33,19 @@ INTERNAL_DOMAINS = ()
 # Sane default used by `dig` and `resolv.conf`
 UPSTREAM_TIMEOUT = 5
 
+NO_RECORD = 0
+EXACT_RECORD = 1
+GLOB_RECORD = 2
 
-def match_record(record: dns.RR, req: dns.DNSQuestion) -> bool:
-    return (req.qname == record.rname or req.qname.matchGlob(record.rname)) and (
-        req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype
-    )
+
+def match_record(record: dns.RR, req: dns.DNSQuestion) -> int:
+    if req.qtype == dns.QTYPE.ANY or req.qtype == record.rtype:
+        if req.qname == record.rname:
+            return EXACT_RECORD
+        if req.qname.matchGlob(record.rname):
+            return GLOB_RECORD
+
+    return NO_RECORD
 
 
 def nodomain(record: dns.DNSRecord) -> dns.DNSRecord:
@@ -113,13 +121,28 @@ async def resolver(
     protocol: str,
     loop=None,
 ) -> dns.DNSRecord:
+    reply = request_record.reply()
+    previous_match = NO_RECORD
     for domain in INTERNAL_DOMAINS:
-        if match_record(domain, request_record.q):
-            answer: dns.RR = copy.copy(domain)
-            answer.rname = request_record.q.qname
+        match = match_record(domain, request_record.q)
+        if not match:
+            continue
+
+        if match == GLOB_RECORD and previous_match == EXACT_RECORD:
+            # glob cannot override exact
+            continue
+
+        answer: dns.RR = copy.copy(domain)
+        answer.rname = request_record.q.qname
+
+        if match == EXACT_RECORD and previous_match == GLOB_RECORD:
+            # exact always overrides glob match
             reply = request_record.reply()
-            reply.add_answer(answer)
-            return reply
+        reply.add_answer(answer)
+        previous_match = match
+
+    if reply.rr:
+        return reply
 
     assert protocol in ["tcp", "udp"]
     loop = loop or asyncio.get_event_loop()
