@@ -132,6 +132,12 @@ async def resolver(
             # glob cannot override exact
             continue
 
+        if domain.rdata is None:
+            # if we are overriding to NXDOMAIN, then don't include it in ANY
+            if request_record.q.qtype == dns.QTYPE.ANY:
+                continue
+            return nodomain(request_record)
+
         answer: dns.RR = copy.copy(domain)
         answer.rname = request_record.q.qname
 
@@ -203,14 +209,12 @@ class DNSResolver(abc.ABC):
             logger.info(
                 f"{protocol} / {request_ip} / "
                 f'"{request.q.qname} ({dns.QTYPE[request.q.qtype]})" --> '
-                f'"{response.q.qname} ({dns.QTYPE[response.q.qtype]})" / '
-                f'RRs: {",".join(dns.QTYPE[a.rtype] for a in response.rr)}'
+                f'RRs: {", ".join(str(a.rdata) for a in response.rr)}'
             )
         else:
             logger.info(
                 f"{protocol} / {request_ip} / "
                 f'"{request.q.qname} ({dns.QTYPE[request.q.qtype]})" --> '
-                f'"{response.q.qname} ({dns.QTYPE[response.q.qtype]}) '
                 f'{dns.RCODE[response.header.rcode]}"'
             )
 
@@ -430,7 +434,7 @@ def reload_conf(path):
                 rtype=getattr(dns.QTYPE, rtype),
                 rclass=getattr(dns.CLASS, rclass),
                 ttl=ttl,
-                rdata=getattr(dns.dns, rtype)(rdata),
+                rdata=getattr(dns.dns, rtype)(rdata) if rdata is not None else rdata,
             )
             for rname, rtype, rclass, ttl, rdata in data
         )
