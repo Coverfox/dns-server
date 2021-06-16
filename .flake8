@@ -1,2 +1,9 @@
 [flake8]
 max-line-length=119
+exclude =
+    .git,
+    .tox,
+    __pycache__,
+ignore =
+    E501,
+    W503

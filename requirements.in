@@ -1,5 +1,5 @@
 dnslib
-pip-tools
+pip-tools<5.0.0
 uvloop
 pre-commit
 isort

@@ -273,10 +273,12 @@ class RaceDNSResolver(DNSResolver):
         self._upstreams = {
             upstream: {
                 "tcp": collections.deque(
-                    (True for _ in range(self.sample_count)), maxlen=self.sample_count,
+                    (True for _ in range(self.sample_count)),
+                    maxlen=self.sample_count,
                 ),
                 "udp": collections.deque(
-                    (True for _ in range(self.sample_count)), maxlen=self.sample_count,
+                    (True for _ in range(self.sample_count)),
+                    maxlen=self.sample_count,
                 ),
             }
             for upstream in value
@@ -330,7 +332,9 @@ class RaceDNSResolver(DNSResolver):
             loop=self.loop,
         )
         callback = functools.partial(
-            self.update_upstream_status, upstream=upstream, protocol=protocol,
+            self.update_upstream_status,
+            upstream=upstream,
+            protocol=protocol,
         )
         fut.add_done_callback(callback)
         return await fut
@@ -510,11 +514,14 @@ def main(args=None):
             raise ValueError("Repeated entries found in upstreams")
 
         handler = RaceDNSResolver(
-            upstreams=options.race, delay=options.delay, loop=loop,
+            upstreams=options.race,
+            delay=options.delay,
+            loop=loop,
         )
     else:
         handler = ProxyDNSResolver(
-            upstreams=options.proxy or [ipaddress.IPv4Address("8.8.8.8")], loop=loop,
+            upstreams=options.proxy or [ipaddress.IPv4Address("8.8.8.8")],
+            loop=loop,
         )
 
     if options.override:
